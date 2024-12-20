@@ -209,7 +209,7 @@ coin_height = [300, 400, 500]
 flap_sound = pygame.mixer.Sound("sound/sfx_wing.wav")
 death_sound = pygame.mixer.Sound("sound/sfx_hit.wav")
 score_sound = pygame.mixer.Sound("sound/sfx_point.wav")
-shot_sound = pygame.mixer.Sound("sound/shots_jon.wav")
+shot_sound = pygame.mixer.Sound("sound/final_shots.wav")
 score_sound_countdown = 100
 
 # Define player character options

@@ -32,16 +32,18 @@ def draw_pipes(pipes):
 
 
 def check_collision(pipes):
-    global can_score
+    global can_score, death_time
     for pipe in pipes:
         if player_rect.colliderect(pipe):
             death_sound.play()
             can_score = True
+            death_time = pygame.time.get_ticks()  # Set the death time
             return False
 
     if player_rect.top <= -100 or player_rect.bottom >= 900:
         death_sound.play()
         can_score = True
+        death_time = pygame.time.get_ticks()  # Set the death time
         return False
     return True
 
@@ -76,8 +78,29 @@ def score_display(game_state):
             (255, 255, 255),
         )
         shot_score_rect = shot_score_surf.get_rect(center=(288, 400))
+        restart_message_surf = game_font.render(
+            "Trykk SPACE/X for å starte", True, (255, 255, 255)
+        )
+        restart_message_rect = restart_message_surf.get_rect(center=(288, 600))
         screen.blit(beer_score_surf, beer_score_rect)
         screen.blit(shot_score_surf, shot_score_rect)
+        screen.blit(restart_message_surf, restart_message_rect)
+    if game_state == "game_paused":
+        beer_score_surf = game_font.render(
+            f"Pils: {(int(beer_score))}", True, (255, 255, 255)
+        )
+        beer_score_rect = beer_score_surf.get_rect(center=(288, 100))
+        shot_score_surf = game_font.render(
+            f"Shots: {(int(shot_score))}", True, (255, 255, 255)
+        )
+        shot_score_rect = shot_score_surf.get_rect(center=(288, 200))
+        restart_message_surf = game_font.render(
+            "Trykk SPACE/X for å starte", True, (255, 255, 255)
+        )
+        restart_message_rect = restart_message_surf.get_rect(center=(288, 500))
+        screen.blit(beer_score_surf, beer_score_rect)
+        screen.blit(shot_score_surf, shot_score_rect)
+        screen.blit(restart_message_surf, restart_message_rect)
 
 
 def update_score(score, high_score):
@@ -97,7 +120,7 @@ def coin_score_check():
             score_sound.play()
         else:
             shot_score += 1
-            score_sound.play()
+            shot_sound.play()
 
         drank_group.remove(collided_sprite)
 
@@ -106,22 +129,26 @@ pygame.init()
 pygame.joystick.init()
 # Check if there are any joysticks/controllers connected
 if pygame.joystick.get_count() > 0:
-    controller = pygame.joystick.Joystick(0)  # Use the correct index for your controller
+    controller = pygame.joystick.Joystick(
+        0
+    )  # Use the correct index for your controller
     controller.init()
 
 screen = pygame.display.set_mode((576, 1024))
 pygame.display.set_caption("Main menu")
 clock = pygame.time.Clock()
-game_font = pygame.font.Font("fonts/AlfaSlabOne-Regular.ttf", 40)
+game_font = pygame.font.Font("fonts/AlfaSlabOne-Regular.ttf", 38)
 
 # Game variables
 gravity = 0.25
 player_movement = 0
 game_active = True
+game_paused = False
 beer_score = 0
 shot_score = 0
 high_score = 0
 can_score = True
+death_time = None
 
 # Background
 bg_surf = pygame.transform.scale2x(
@@ -182,6 +209,7 @@ coin_height = [300, 400, 500]
 flap_sound = pygame.mixer.Sound("sound/sfx_wing.wav")
 death_sound = pygame.mixer.Sound("sound/sfx_hit.wav")
 score_sound = pygame.mixer.Sound("sound/sfx_point.wav")
+shot_sound = pygame.mixer.Sound("sound/shots_jon.wav")
 score_sound_countdown = 100
 
 # Define player character options
@@ -198,6 +226,7 @@ character_options = [
     "carlos.png",
     "aleks.png",
     "oye.png",
+    "nils.png",
 ]
 character_labels = [
     "Nikken",
@@ -210,6 +239,7 @@ character_labels = [
     "Coach",
     "David",
     "Regnbuegutten",
+    "Nils Pils",
 ]
 selected_character_index = 0  # Initially, the first character is selected
 
@@ -228,58 +258,88 @@ def get_font(size):
 
 
 def play():
-    global game_active, player_movement, player_surf, player_rect, pipe_list, floor_x_pos, player_index, beer_score, shot_score, high_score, selected_character_index
+    global game_active, player_movement, player_surf, player_rect, pipe_list, floor_x_pos, player_index, beer_score, shot_score, high_score, selected_character_index, game_paused, death_time
 
-    pygame.display.set_caption("GÆTTA")
+    pygame.display.set_caption("Julesand i Lillebord")
 
     while True:
+        current_time = pygame.time.get_ticks()
         for event in pygame.event.get():
             # Check for controller input
             if event.type == pygame.QUIT:
                 pygame.quit()
                 sys.exit()
-            if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_SPACE and game_active:
-                    player_movement = 0
-                    player_movement -= 10
-                    flap_sound.play()
+            if (
+                death_time is None or current_time - death_time > 1000
+            ):  # Check if 1 second has passed since death
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_SPACE and game_active:
+                        player_movement = 0
+                        player_movement -= 9
+                        flap_sound.play()
 
-                if event.key == pygame.K_SPACE and game_active == False:
-                    game_active = True
+                    if event.key == pygame.K_SPACE and game_active == False:
+                        game_active = True
+                        game_paused = False
+                        player_rect.center = (100, 512)
+                        player_movement = 0
+                        beer_score = 0
+                        shot_score = 0
+                        death_time = None  # Reset death time
+                    if event.key == pygame.K_UP and game_active == False:
+                        select_player()
 
-                    player_rect.center = (100, 512)
-                    player_movement = 0
-                    beer_score = 0
-                    shot_score = 0
-                if event.key == pygame.K_UP and game_active == False:
-                    select_player()
+                if event.type == SPAWNPIPE:
+                    pipe_list.extend(create_pipe())
 
-            if event.type == SPAWNPIPE:
-                pipe_list.extend(create_pipe())
+                if event.type == SPAWNCOIN and game_active:
+                    drank_group.add(
+                        Coin(
+                            random.choice(
+                                [
+                                    "beer",
+                                    "beer",
+                                    "beer",
+                                    "beer",
+                                    "beer",
+                                    "beer",
+                                    "beer",
+                                    "beer",
+                                    "beer",
+                                    "shot",
+                                ]
+                            )
+                        )
+                    )
 
-            if event.type == SPAWNCOIN and game_active:
-                drank_group.add(Coin(random.choice(["beer", "beer","beer","beer","beer","beer","beer","beer","beer","shot"])))
-        
-            if event.type == PLAYERFLAP:
-                if player_index < 2:
-                    player_index += 1
-                else:
-                    player_index = 0
-            if event.type == pygame.JOYBUTTONDOWN:
-                button = event.button
-                if button == 0 and game_active:
-                    player_movement = 0
-                    player_movement -= 11
-                    flap_sound.play()
-                if button == 0 and not game_active:
-                    game_active = True
-                    pipe_list.clear()
-                    player_rect.center = (100, 512)
-                    player_movement = 0
-                    beer_score = 0
-                    shot_score = 0
-                if button == 1 and not game_active:
-                    select_player()
+                if event.type == PLAYERFLAP:
+                    if player_index < 2:
+                        player_index += 1
+                    else:
+                        player_index = 0
+                if event.type == pygame.JOYBUTTONDOWN:
+                    button = event.button
+                    if button == 0 and game_active:
+                        player_movement = 0
+                        player_movement -= 9
+                        flap_sound.play()
+                    if button == 0 and not game_active:
+                        game_active = True
+                        game_paused = False
+                        pipe_list.clear()
+                        player_rect.center = (100, 512)
+                        player_movement = 0
+                        beer_score = 0
+                        shot_score = 0
+                        death_time = None  # Reset death time
+                    if (
+                        button == 11
+                        or button == 12
+                        or button == 13
+                        or button == 14
+                        and game_active == False
+                    ):
+                        select_player()
         screen.blit(bg_surf, (0, 0))
 
         if game_active:
@@ -303,11 +363,17 @@ def play():
             coin_score_check()
             score_display("main_game")
 
+        elif game_active == False and game_paused:
+            beer_score = 0
+            shot_score = 0
+            pipe_list.clear()
+            drank_group.empty()
+            score_display("game_paused")
         else:
             game_active = False
             pipe_list.clear()
             drank_group.empty()
-            #screen.blit(game_over_surface, game_over_rect)
+            # screen.blit(game_over_surface, game_over_rect)
             score_display("game_over")
 
         # Floor
@@ -322,7 +388,7 @@ def play():
 
 
 def select_player():
-    global player_surf, selected_character_index, game_active
+    global player_surf, selected_character_index, game_active, game_paused
 
     pygame.display.set_caption("Velg spiller")
 
@@ -332,6 +398,7 @@ def select_player():
     character_y = 275
 
     while True:
+        game_paused = True
         game_active = False
         OPTIONS_MOUSE_POS = pygame.mouse.get_pos()
 
@@ -400,7 +467,7 @@ def select_player():
                     if character_x >= 576:
                         character_x = 125
                         character_y += 130
-            
+
             # Handle controller input
             if event.type == pygame.JOYBUTTONDOWN:
                 button = event.button
@@ -437,7 +504,7 @@ def select_player():
 
 
 def main_menu():
-    pygame.display.set_caption("Menu")
+    pygame.display.set_caption("Julesand i Lillebord")
     # Define the buttons and their positions
     # Initialize selected button index
     selected_button_index = 0
@@ -482,7 +549,7 @@ def main_menu():
         for button in buttons:
             x = buttons[selected_button_index].x_pos
             y = buttons[selected_button_index].y_pos
-            button.change_color((x,y))
+            button.change_color((x, y))
             button.update(screen)
 
         for event in pygame.event.get():
@@ -519,9 +586,9 @@ def main_menu():
             # Render buttons and highlight the selected button
             for i, button in enumerate(buttons):
                 if i == selected_button_index:
-                    button.change_color((x,y))
+                    button.change_color((x, y))
                 else:
-                    button.change_color((x,y))
+                    button.change_color((x, y))
                 button.update(screen)
                 pygame.display.update()
 
